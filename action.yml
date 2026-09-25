@@ -1,0 +1,32 @@
+name: canidelete
+description: Find workarounds you can finally delete (closed upstream issues, upgraded deps, passed deadlines)
+branding:
+  icon: trash-2
+  color: green
+inputs:
+  path:
+    description: Directory to scan
+    default: "."
+  check:
+    description: Fail when something can be deleted
+    default: "false"
+  strict:
+    description: With check, also fail on won't-fix / unknown
+    default: "false"
+  args:
+    description: Extra CLI arguments
+    default: ""
+  token:
+    description: GitHub token for issue lookups
+    default: ${{ github.token }}
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+      run: |
+        flags=()
+        [ "${{ inputs.check }}" = "true" ] && flags+=(--check)
+        [ "${{ inputs.strict }}" = "true" ] && flags+=(--strict)
+        python3 "${{ github.action_path }}/canidelete/cli.py" -C "${{ inputs.path }}" --all "${flags[@]}" ${{ inputs.args }}
