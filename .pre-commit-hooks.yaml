@@ -1,0 +1,7 @@
+- id: canidelete
+  name: canidelete (workarounds you can delete)
+  entry: canidelete --check --offline
+  language: python
+  pass_filenames: false
+  always_run: true
+  description: Fails when a REMOVE-WHEN / REMOVE-AFTER tripwire has fired (versions and dates; offline).

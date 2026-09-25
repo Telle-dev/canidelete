@@ -1,3 +1,4 @@
+<!-- canidelete: ignore-file -->
 <div align="center">
 
 # 🗑️ canidelete
@@ -10,10 +11,12 @@
 ![License: MIT](https://img.shields.io/badge/license-MIT-lightgrey)
 [![Donate LTC](https://img.shields.io/badge/donate-LTC-345D9D?logo=litecoin&logoColor=white)](#-support)
 
+<img src="assets/demo.svg" alt="canidelete finding workarounds that can be deleted" width="700">
+
 </div>
 
 ```python
-# Workaround for https://github.com/psf/requests/issues/6432
+# Workaround for https://github.com/acme/http/issues/6432
 # REMOVE-WHEN: requests>=2.32
 session.mount("https://", LegacyCertAdapter())
 ```
@@ -27,11 +30,11 @@ $ pipx run canidelete
 ✅ DELETE IT  src/client.py:2
      ✅ requests>=2.32  you have requests 2.32.3 (requirements.txt)
 ✅ DELETE IT  src/compat.ts:41
-     ✅ https://github.com/microsoft/TypeScript/issues/47920  closed 7mo ago "Satisfies operator"
+     ✅ https://github.com/acme/compiler/issues/4792  closed 7mo ago "Support satisfies"
 ✅ DELETE IT  src/legacy.py:12
      ✅ 2026-06-30  deadline passed 87 days ago
 🪦 WON'T FIX  src/ios.css:88
-     🪦 https://github.com/WebKit/WebKit/pull/1234  PR closed without merging 2y 1mo ago
+     🪦 https://github.com/acme/browser/pull/1234  PR closed without merging 2y 1mo ago
 
 14 tripwires in 9 files: 3 delete it, 1 won't fix, 10 not yet
 🗑️  3 workarounds can be deleted today.
@@ -126,6 +129,17 @@ jobs:
 ```
 
 Results land in the job summary as a table.
+
+## pre-commit
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/Telle-dev/canidelete
+    rev: v0.1.0
+    hooks:
+      - id: canidelete   # offline: versions and dates only, never slows your commit on the network
+```
 
 ## How it works
 
