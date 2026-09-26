@@ -2,10 +2,11 @@ name: Release
 on:
   push:
     tags: ["v*.*.*"]
+  release:
+    types: [published]
 jobs:
-  pypi:
+  build:
     runs-on: ubuntu-latest
-    environment: pypi
     permissions:
       id-token: write      # PyPI trusted publishing, no API token needed
       contents: write
@@ -14,7 +15,10 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: python -m pip install build && python -m build
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      # Turn on once PyPI trusted publishing is set up:
+      # Settings > Secrets and variables > Actions > Variables > PUBLISH_PYPI = true
+      - if: vars.PUBLISH_PYPI == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
       - uses: softprops/action-gh-release@v2
         with:
           files: |
