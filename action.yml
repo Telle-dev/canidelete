@@ -7,17 +7,23 @@ inputs:
   path:
     description: Directory to scan
     default: "."
+  comment:
+    description: On pull requests, post one sticky comment when workarounds can be deleted (needs pull-requests write permission)
+    default: "true"
   check:
-    description: Fail when something can be deleted
+    description: Fail the job when something can be deleted
     default: "false"
   strict:
     description: With check, also fail on won't-fix / unknown
     default: "false"
+  badge:
+    description: Write a 'dead workarounds' SVG badge to this path (commit or upload it yourself)
+    default: ""
   args:
     description: Extra CLI arguments
     default: ""
   token:
-    description: GitHub token for issue lookups
+    description: GitHub token for issue lookups and PR comments
     default: ${{ github.token }}
 runs:
   using: composite
@@ -25,8 +31,20 @@ runs:
     - shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.token }}
+        IN_PATH: ${{ inputs.path }}
+        IN_COMMENT: ${{ inputs.comment }}
+        IN_CHECK: ${{ inputs.check }}
+        IN_STRICT: ${{ inputs.strict }}
+        IN_BADGE: ${{ inputs.badge }}
+        IN_ARGS: ${{ inputs.args }}
+        EVENT: ${{ github.event_name }}
       run: |
-        flags=()
-        [ "${{ inputs.check }}" = "true" ] && flags+=(--check)
-        [ "${{ inputs.strict }}" = "true" ] && flags+=(--strict)
-        python3 "${{ github.action_path }}/canidelete/cli.py" -C "${{ inputs.path }}" --all "${flags[@]}" ${{ inputs.args }}
+        flags=(-C "$IN_PATH" --all)
+        [ "$IN_CHECK" = "true" ] && flags+=(--check)
+        [ "$IN_STRICT" = "true" ] && flags+=(--strict)
+        [ -n "$IN_BADGE" ] && flags+=(--badge "$IN_BADGE")
+        if [ "$IN_COMMENT" = "true" ] && { [ "$EVENT" = "pull_request" ] || [ "$EVENT" = "pull_request_target" ]; }; then
+          flags+=(--comment-pr)
+        fi
+        # shellcheck disable=SC2086
+        python3 "${{ github.action_path }}/canidelete/cli.py" "${flags[@]}" $IN_ARGS

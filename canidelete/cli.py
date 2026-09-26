@@ -30,7 +30,7 @@ ORDER = {YES: 0, WONTFIX: 1, UNKNOWN: 2, NO: 3}
 
 GH_LINK = re.compile(r"https?://github\.com/([\w.-]+)/([\w.-]+)/(issues|pull)/(\d+)")
 MARKER = re.compile(
-    r"(?:\b(?:REMOVE|DELETE|DROP)[-_](?:WHEN|AFTER|IF)\s*[:=]|\bcanidelete\s*:)\s*(.+)",
+    r"(?:\b(?:REMOVE|DELETE|DROP)[-_](?:WHEN|AFTER|IF)\s*[:=]|(?<![\"'`\w])canidelete\s*:)\s*(.+)",
     re.I,
 )
 IGNORE = re.compile(r"canidelete\s*:\s*ignore\b(?!-)", re.I)
@@ -485,15 +485,122 @@ def render(findings: List[Finding], color: bool = False, show_all: bool = False)
     return "\n".join(out)
 
 
-def to_markdown(findings: List[Finding]) -> str:
+HOME = "https://github.com/Telle-dev/canidelete"
+COMMENT_MARK = "<!-- canidelete-report -->"
+FOOTER = ("<sub>🗑️ Found by [canidelete](%s), the tool that tells you when a workaround can go. "
+          "If it saved you time, a ⭐ helps others find it.</sub>" % HOME)
+
+
+def _file_link(f: Finding) -> str:
+    server, repo, sha = (os.environ.get(k) for k in ("GITHUB_SERVER_URL", "GITHUB_REPOSITORY", "GITHUB_SHA"))
+    label = "`%s:%d`" % (f.file, f.line)
+    if server and repo and sha:
+        return "[%s](%s/%s/blob/%s/%s#L%d)" % (label, server, repo, sha, f.file, f.line)
+    return label
+
+
+def to_markdown(findings: List[Finding], footer: bool = True) -> str:
     rows = sorted((f for f in findings if f.status != NO), key=lambda f: (ORDER[f.status], f.file, f.line))
+    n_yes = sum(1 for f in findings if f.status == YES)
+    if n_yes:
+        head = "### 🗑️ %d workaround%s can be deleted" % (n_yes, "" if n_yes == 1 else "s")
+    else:
+        head = "### ✅ No dead workarounds"
+    out = [head, ""]
     if not rows:
-        return "### canidelete\nNothing to delete yet. All %d tripwires are still waiting.\n" % len(findings)
-    out = ["### canidelete", "", "| | Location | Why |", "|---|---|---|"]
-    for f in rows:
-        why = "<br>".join("%s `%s` %s" % (STYLE[c.status][0], c.text, c.detail) for c in f.conditions)
-        out.append("| %s %s | `%s:%d` | %s |" % (STYLE[f.status][0], STYLE[f.status][1], f.file, f.line, why))
+        out.append("All %d tripwires are still waiting on something. Nothing to clean up." % len(findings))
+    else:
+        out += ["| | Location | Why |", "|---|---|---|"]
+        for f in rows:
+            why = "<br>".join("%s `%s` %s" % (STYLE[c.status][0], c.text.replace("|", "\\|"), c.detail.replace("|", "\\|"))
+                              for c in f.conditions)
+            out.append("| %s %s | %s | %s |" % (STYLE[f.status][0], STYLE[f.status][1], _file_link(f), why))
+    if footer:
+        out += ["", FOOTER]
     return "\n".join(out) + "\n"
+
+
+# --------------------------------------------------------------------------- badge
+
+def badge_svg(findings: List[Finding]) -> str:
+    """shields-style badge: 'dead workarounds | N'."""
+    n = sum(1 for f in findings if f.status == YES)
+    label, value = "dead workarounds", str(n)
+    color = "#3fb950" if n == 0 else ("#d29922" if n < 5 else "#e05d44")
+    lw, vw = 6 * len(label) + 20, 7 * len(value) + 16
+    w = lw + vw
+    return (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="20" role="img" aria-label="{l}: {v}">'
+        '<title>{l}: {v} (canidelete)</title>'
+        '<linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/>'
+        '<stop offset="1" stop-opacity=".1"/></linearGradient>'
+        '<clipPath id="r"><rect width="{w}" height="20" rx="3" fill="#fff"/></clipPath>'
+        '<g clip-path="url(#r)"><rect width="{lw}" height="20" fill="#555"/>'
+        '<rect x="{lw}" width="{vw}" height="20" fill="{c}"/><rect width="{w}" height="20" fill="url(#s)"/></g>'
+        '<g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11">'
+        '<text x="{lx}" y="15" fill="#010101" fill-opacity=".3">{l}</text><text x="{lx}" y="14">{l}</text>'
+        '<text x="{vx}" y="15" fill="#010101" fill-opacity=".3">{v}</text><text x="{vx}" y="14">{v}</text></g></svg>'
+    ).format(w=w, lw=lw, vw=vw, c=color, l=label, v=value, lx=lw / 2, vx=lw + vw / 2)
+
+
+# --------------------------------------------------------------------------- PR comments
+
+def _gh_api(method: str, url: str, token: str, body: Optional[dict] = None) -> Tuple[int, object]:
+    req = urllib.request.Request(url, method=method, data=json.dumps(body).encode() if body is not None else None,
+                                 headers={"Accept": "application/vnd.github+json",
+                                          "Authorization": "Bearer " + token,
+                                          "User-Agent": "canidelete/" + __version__,
+                                          "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            raw = r.read()
+            return r.status, (json.loads(raw) if raw else None)
+    except urllib.error.HTTPError as e:
+        return e.code, None
+    except Exception:
+        return 0, None
+
+
+def comment_on_pr(findings: List[Finding], token: Optional[str], api=_gh_api) -> str:
+    """Create or update one sticky comment on the current pull request.
+
+    Posts only when something can be deleted; afterwards keeps that same comment
+    up to date (including flipping it to 'all clear'). Never spams new comments.
+    """
+    event_path, repo = os.environ.get("GITHUB_EVENT_PATH"), os.environ.get("GITHUB_REPOSITORY")
+    if not (event_path and repo and token):
+        return "skipped: not running in a GitHub Actions pull_request job with a token"
+    try:
+        with open(event_path, encoding="utf-8") as fh:
+            event = json.load(fh)
+    except (OSError, ValueError):
+        return "skipped: unreadable event payload"
+    number = (event.get("pull_request") or {}).get("number")
+    if not number:
+        return "skipped: not a pull_request event"
+    base = os.environ.get("GITHUB_API_URL", "https://api.github.com")
+    url = "%s/repos/%s/issues/%s/comments" % (base, repo, number)
+    existing = None
+    for page in range(1, 11):
+        status, data = api("GET", "%s?per_page=100&page=%d" % (url, page), token)
+        if status != 200 or not data:
+            break
+        existing = next((c for c in data if COMMENT_MARK in (c.get("body") or "")), existing)
+        if len(data) < 100:
+            break
+    has_dead = any(f.status == YES for f in findings)
+    if not existing and not has_dead:
+        return "nothing to report"
+    body = COMMENT_MARK + "\n" + to_markdown(findings)
+    if existing:
+        status, _ = api("PATCH", "%s/repos/%s/issues/comments/%s" % (base, repo, existing["id"]), token, {"body": body})
+        return "updated comment" if status == 200 else "failed to update comment (HTTP %s)" % status
+    status, _ = api("POST", url, token, {"body": body})
+    if status == 201:
+        return "posted comment"
+    if status == 403:
+        return "no permission to comment: add 'permissions: pull-requests: write' to the workflow"
+    return "failed to post comment (HTTP %s)" % status
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -513,6 +620,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--format", choices=("text", "json", "markdown"), default="text")
     p.add_argument("--json", action="store_const", const="json", dest="format", help="shorthand for --format json")
     p.add_argument("--token", help="GitHub token (default: $GITHUB_TOKEN, $GH_TOKEN or `gh auth token`)")
+    p.add_argument("--badge", metavar="FILE", help="write a 'dead workarounds' SVG badge to FILE")
+    p.add_argument("--comment-pr", action="store_true",
+                   help="in a GitHub Actions pull_request job, post/update a sticky PR comment")
     p.add_argument("--no-color", action="store_true")
     p.add_argument("--version", action="version", version="canidelete " + __version__)
     a = p.parse_args(argv)
@@ -539,6 +649,13 @@ def main(argv: Optional[List[str]] = None) -> int:
                 fh.write(to_markdown(findings))
         except OSError:
             pass
+
+    if a.badge:
+        with open(a.badge, "w", encoding="utf-8") as fh:
+            fh.write(badge_svg(findings))
+
+    if a.comment_pr:
+        print("[canidelete] " + comment_on_pr(findings, _token(a.token)), file=sys.stderr)
 
     if a.check:
         bad = {YES} | ({WONTFIX, UNKNOWN} if a.strict else set())

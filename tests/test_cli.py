@@ -92,6 +92,9 @@ class ParseTests(unittest.TestCase):
         self.assertIsNone(cli.scan_line("# add a REMOVE" + "-WHEN comment to your code"))
         self.assertIsNone(cli.scan_line("x = 1  # " + "canidelete: ignore"))
 
+    def test_quoted_name_is_not_a_marker(self):
+        self.assertIsNone(cli.scan_line('print("canid' + 'elete: hello")'))
+
     def test_ignore_file(self):
         with Project({"a.py": "# canidelete: " + "ignore-file\n# %s 2020-01-01\n" % A}) as p:
             self.assertEqual(p.run(), [])
@@ -208,3 +211,80 @@ class EndToEndTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SpreadTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.event = os.path.join(self.tmp.name, "event.json")
+        with open(self.event, "w") as f:
+            json.dump({"pull_request": {"number": 7}}, f)
+        self.env = {"GITHUB_EVENT_PATH": self.event, "GITHUB_REPOSITORY": "o/r",
+                    "GITHUB_API_URL": "https://api.test"}
+        self.old = {k: os.environ.get(k) for k in self.env}
+        os.environ.update(self.env)
+
+    def tearDown(self):
+        for k, v in self.old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        self.tmp.cleanup()
+
+    def api(self, existing):
+        calls = []
+
+        def fake(method, url, token, body=None):
+            calls.append((method, url, body))
+            if method == "GET":
+                return 200, existing
+            return (201 if method == "POST" else 200), {}
+
+        fake.calls = calls
+        return fake
+
+    def findings(self, dead):
+        f = cli.Finding("a.py", 1, "", [cli.Condition("2020-01-01", "date", cli.YES if dead else cli.NO, "x")])
+        return [f]
+
+    def test_posts_when_dead(self):
+        api = self.api([])
+        self.assertEqual(cli.comment_on_pr(self.findings(True), "t", api=api), "posted comment")
+        method, url, body = api.calls[-1]
+        self.assertEqual((method, url), ("POST", "https://api.test/repos/o/r/issues/7/comments"))
+        self.assertIn(cli.COMMENT_MARK, body["body"])
+        self.assertIn("github.com/Telle-dev/canidelete", body["body"])
+
+    def test_silent_when_clean_and_no_prior_comment(self):
+        api = self.api([{"id": 1, "body": "unrelated"}])
+        self.assertEqual(cli.comment_on_pr(self.findings(False), "t", api=api), "nothing to report")
+        self.assertEqual([c[0] for c in api.calls], ["GET"])
+
+    def test_updates_existing_sticky_comment(self):
+        api = self.api([{"id": 99, "body": cli.COMMENT_MARK + " old"}])
+        self.assertEqual(cli.comment_on_pr(self.findings(False), "t", api=api), "updated comment")
+        method, url, body = api.calls[-1]
+        self.assertEqual((method, url), ("PATCH", "https://api.test/repos/o/r/issues/comments/99"))
+        self.assertIn("No dead workarounds", body["body"])
+
+    def test_not_a_pr(self):
+        with open(self.event, "w") as f:
+            json.dump({"push": True}, f)
+        self.assertIn("not a pull_request", cli.comment_on_pr(self.findings(True), "t", api=self.api([])))
+        self.assertIn("skipped", cli.comment_on_pr(self.findings(True), None, api=self.api([])))
+
+    def test_badge(self):
+        self.assertIn(">0<", cli.badge_svg(self.findings(False)))
+        self.assertIn("#3fb950", cli.badge_svg(self.findings(False)))
+        self.assertIn(">1<", cli.badge_svg(self.findings(True)))
+
+    def test_markdown_links_and_escapes(self):
+        os.environ.update({"GITHUB_SERVER_URL": "https://github.com", "GITHUB_SHA": "abc"})
+        try:
+            f = cli.Finding("x.py", 3, "", [cli.Condition("a|b", "date", cli.YES, "d")])
+            md = cli.to_markdown([f])
+        finally:
+            os.environ.pop("GITHUB_SERVER_URL"); os.environ.pop("GITHUB_SHA")
+        self.assertIn("https://github.com/o/r/blob/abc/x.py#L3", md)
+        self.assertIn("a\\|b", md)
