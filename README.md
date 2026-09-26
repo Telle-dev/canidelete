@@ -123,7 +123,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Telle-dev/canidelete@v0
+      - uses: Telle-dev/canidelete@v0.1.0
         with:
           check: true        # fail the run when something can be deleted
 ```
