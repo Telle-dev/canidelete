@@ -9,6 +9,7 @@
 ![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue)
 ![zero dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)
 ![License: MIT](https://img.shields.io/badge/license-MIT-lightgrey)
+[![dead workarounds](assets/badge-example.svg)](#badge)
 [![Donate LTC](https://img.shields.io/badge/donate-LTC-345D9D?logo=litecoin&logoColor=white)](#-support)
 
 <img src="assets/demo.svg" alt="canidelete finding workarounds that can be deleted" width="700">
@@ -108,27 +109,54 @@ in parallel, but for bigger repos set `GITHUB_TOKEN` (or be logged in with `gh`,
 | Python | `uv.lock`, `poetry.lock`, `pdm.lock`, pinned `requirements*.txt`, installed packages |
 | Runtimes | `python` = the running interpreter, `node` = `node --version` |
 
-## GitHub Action
+## GitHub Action: a bot that tells you on every PR
 
-Get a weekly report of workarounds you can delete:
+Add this file and canidelete comments on pull requests **only when there's something to delete**,
+then keeps that one comment up to date. No spam, no noise.
 
 ```yaml
 # .github/workflows/canidelete.yml
 name: canidelete
 on:
-  schedule: [{ cron: "0 8 * * 1" }]   # every Monday
-  workflow_dispatch:
+  pull_request:
+  schedule: [{ cron: "0 8 * * 1" }]   # weekly report in the job summary
+permissions:
+  contents: read
+  pull-requests: write
 jobs:
   scan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: Telle-dev/canidelete@v0.1.0
-        with:
-          check: true        # fail the run when something can be deleted
 ```
 
-Results land in the job summary as a table.
+What your team sees on the PR:
+
+> ### 🗑️ 2 workarounds can be deleted
+>
+> | | Location | Why |
+> |---|---|---|
+> | ✅ DELETE IT | `src/http/client.py:42` | ✅ `requests>=2.32` you have requests 2.32.3 (requirements.txt) |
+> | ✅ DELETE IT | `web/Modal.tsx:17` | ✅ `github.com/acme/ui-kit/issues/2450` closed 1y 2mo ago |
+
+Options: `check: true` fails the job, `comment: false` turns off comments, `badge: badge.svg` writes a badge.
+
+## Badge
+
+Show the world your codebase is clean:
+
+[![dead workarounds](https://raw.githubusercontent.com/Telle-dev/canidelete/main/assets/badge-example.svg)](https://github.com/Telle-dev/canidelete)
+
+```bash
+canidelete --badge badge.svg     # green at 0, orange under 5, red after that
+```
+
+Or the static one, if you just want people to know you track workarounds:
+
+```markdown
+[![workarounds tracked by canidelete](https://img.shields.io/badge/workarounds-tracked_by_canidelete-3fb950)](https://github.com/Telle-dev/canidelete)
+```
 
 ## pre-commit
 
