@@ -131,7 +131,7 @@ jobs:
       - uses: Telle-dev/canidelete@v0.1.0
 ```
 
-What your team sees on the PR:
+What your team sees on the PR ([live example](https://github.com/Telle-dev/canidelete/pull/1)):
 
 > ### 🗑️ 2 workarounds can be deleted
 >
