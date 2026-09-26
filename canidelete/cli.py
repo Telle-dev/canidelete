@@ -487,8 +487,7 @@ def render(findings: List[Finding], color: bool = False, show_all: bool = False)
 
 HOME = "https://github.com/Telle-dev/canidelete"
 COMMENT_MARK = "<!-- canidelete-report -->"
-FOOTER = ("<sub>🗑️ Found by [canidelete](%s), the tool that tells you when a workaround can go. "
-          "If it saved you time, a ⭐ helps others find it.</sub>" % HOME)
+FOOTER = "<sub>found by [canidelete](%s)</sub>" % HOME
 
 
 def _file_link(f: Finding) -> str:

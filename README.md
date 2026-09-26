@@ -1,20 +1,9 @@
 <!-- canidelete: ignore-file -->
-<div align="center">
-
-# 🗑️ canidelete
-
-**Your codebase is full of workarounds whose reason to exist died years ago.<br>canidelete finds them.**
+# canidelete
 
 [![CI](https://github.com/Telle-dev/canidelete/actions/workflows/ci.yml/badge.svg)](https://github.com/Telle-dev/canidelete/actions/workflows/ci.yml)
-![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue)
-![zero dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)
-![License: MIT](https://img.shields.io/badge/license-MIT-lightgrey)
-[![dead workarounds](assets/badge-example.svg)](#badge)
-[![Donate LTC](https://img.shields.io/badge/donate-LTC-345D9D?logo=litecoin&logoColor=white)](#-support)
 
-<img src="assets/demo.svg" alt="canidelete finding workarounds that can be deleted" width="700">
-
-</div>
+Finds workarounds in your code that you can delete now because the bug got fixed, you upgraded the dependency, or the deadline passed.
 
 ```python
 # Workaround for https://github.com/acme/http/issues/6432
@@ -22,26 +11,11 @@
 session.mount("https://", LegacyCertAdapter())
 ```
 
-You wrote that eighteen months ago. The upstream bug got fixed. You upgraded `requests`.
-The workaround is still there, and nobody remembers why.
+You wrote that a year and a half ago. The bug got fixed upstream, you upgraded `requests`, and the workaround is still sitting there because nobody remembers why it exists.
 
-```console
-$ pipx run canidelete
+<img src="assets/demo.svg" alt="canidelete output" width="700">
 
-✅ DELETE IT  src/client.py:2
-     ✅ requests>=2.32  you have requests 2.32.3 (requirements.txt)
-✅ DELETE IT  src/compat.ts:41
-     ✅ https://github.com/acme/compiler/issues/4792  closed 7mo ago "Support satisfies"
-✅ DELETE IT  src/legacy.py:12
-     ✅ 2026-06-30  deadline passed 87 days ago
-🪦 WON'T FIX  src/ios.css:88
-     🪦 https://github.com/acme/browser/pull/1234  PR closed without merging 2y 1mo ago
-
-14 tripwires in 9 files: 3 delete it, 1 won't fix, 10 not yet
-🗑️  3 workarounds can be deleted today.
-```
-
-## Why this is different
+## Why not just a TODO scanner?
 
 TODO scanners tell you **how old** a comment is. That tells you nothing. A 3-year-old workaround
 for a bug that's still open is doing its job. A 2-week-old one for a bug fixed yesterday is dead code.
@@ -109,10 +83,10 @@ in parallel, but for bigger repos set `GITHUB_TOKEN` (or be logged in with `gh`,
 | Python | `uv.lock`, `poetry.lock`, `pdm.lock`, pinned `requirements*.txt`, installed packages |
 | Runtimes | `python` = the running interpreter, `node` = `node --version` |
 
-## GitHub Action: a bot that tells you on every PR
+## GitHub Action
 
 Add this file and canidelete comments on pull requests **only when there's something to delete**,
-then keeps that one comment up to date. No spam, no noise.
+then keeps that one comment up to date. 
 
 ```yaml
 # .github/workflows/canidelete.yml
@@ -144,7 +118,7 @@ Options: `check: true` fails the job, `comment: false` turns off comments, `badg
 
 ## Badge
 
-Show the world your codebase is clean:
+
 
 [![dead workarounds](https://raw.githubusercontent.com/Telle-dev/canidelete/main/assets/badge-example.svg)](https://github.com/Telle-dev/canidelete)
 
@@ -195,11 +169,11 @@ git clone https://github.com/Telle-dev/canidelete && cd canidelete
 python -m unittest discover -s tests
 ```
 
-Issues and PRs are very welcome. If canidelete deleted some dead code for you, a ⭐ helps other people find it.
+Issues and PRs welcome.
 
-## 💜 Support
+## Support
 
-If canidelete saved you some time, you can buy me a coffee in Litecoin:
+If this saved you some time you can send me some Litecoin:
 
 **LTC:** `LYAhqRNLjzSCfAzFKGLRnRA7qFnfidbT1U`
 
