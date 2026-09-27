@@ -15,6 +15,16 @@ You wrote that a year and a half ago. The bug got fixed upstream, you upgraded `
 
 <img src="assets/demo.svg" alt="canidelete output" width="700">
 
+## What it finds in big projects
+
+I ran it on 30 popular repos (VS Code, Kubernetes, Node, TypeScript, React, pandas, Next.js and others). Counting only comments that say they're a workaround or a TODO and link to an issue:
+
+- **258** point at an issue that's already closed or a PR that's merged
+- **207** of those were closed more than a year ago
+- the oldest is a Kubernetes TODO waiting on a Go issue that was closed 11 years ago
+
+Full list: [study/STRICT.md](study/STRICT.md). Raw data for every link: [study/RESULTS.md](study/RESULTS.md).
+
 ## Why not just a TODO scanner?
 
 TODO scanners tell you **how old** a comment is. That tells you nothing. A 3-year-old workaround
