@@ -1,0 +1,33 @@
+name: study
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["study/run_study.py", ".github/workflows/study.yml"]
+permissions:
+  contents: write
+concurrency: study
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Run study
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+        run: |
+          python study/run_study.py \
+            facebook/react vercel/next.js microsoft/vscode microsoft/TypeScript nodejs/node \
+            denoland/deno oven-sh/bun sveltejs/svelte vuejs/core django/django \
+            pallets/flask fastapi/fastapi psf/requests pandas-dev/pandas numpy/numpy \
+            scikit-learn/scikit-learn huggingface/transformers electron/electron vitejs/vite prettier/prettier \
+            eslint/eslint microsoft/playwright home-assistant/core rails/rails neovim/neovim \
+            python/cpython golang/go kubernetes/kubernetes tailwindlabs/tailwindcss grafana/grafana
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add study/RESULTS.md study/results.json
+          git diff --cached --quiet || (git commit -m "Study results" && git pull --rebase && git push)

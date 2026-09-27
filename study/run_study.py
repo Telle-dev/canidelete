@@ -14,6 +14,10 @@ import json
 import os
 import subprocess
 import sys
+import threading
+import time
+import urllib.error
+import urllib.request
 from collections import Counter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -34,12 +38,48 @@ neovim/neovim tensorflow/tensorflow apache/airflow langchain-ai/langchain sentry
 """.split()
 
 
+_cache = {}
+_lock = threading.Lock()
+
+
+def fetch(owner, repo, num, token):
+    """Same as cli.fetch_github, but cached across repos and waits out rate limits."""
+    key = (owner, repo, num)
+    if key in _cache:
+        return _cache[key]
+    url = "https://api.github.com/repos/%s/%s/issues/%s" % key
+    for _ in range(5):
+        req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json",
+                                                   "User-Agent": "canidelete-study",
+                                                   "Authorization": "Bearer " + token})
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                data = json.load(r)
+                break
+        except urllib.error.HTTPError as e:
+            if e.code in (403, 429) and e.headers.get("X-RateLimit-Remaining") == "0":
+                wait = max(5, int(e.headers.get("X-RateLimit-Reset", time.time() + 60)) - int(time.time()) + 2)
+                with _lock:
+                    print("   rate limited, sleeping %ds" % wait, file=sys.stderr)
+                time.sleep(wait)
+                continue
+            data = {"_error": "HTTP %d" % e.code}
+            break
+        except Exception as e:
+            data = {"_error": e.__class__.__name__}
+            break
+    else:
+        data = {"_error": "rate limited"}
+    _cache[key] = data
+    return data
+
+
 def run(repo):
     dest = os.path.join(HERE, ".repos", repo.replace("/", "__"))
     if not os.path.isdir(dest):
         subprocess.run(["git", "clone", "-q", "--depth", "1", "https://github.com/%s.git" % repo, dest], check=True)
     findings = cli.scan(dest)
-    cli.evaluate(findings, dest)
+    cli.evaluate(findings, dest, fetch=fetch)
     return findings
 
 
